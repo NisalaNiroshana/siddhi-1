@@ -28,9 +28,9 @@ import org.wso2.siddhi.core.executor.ExpressionExecutor;
 import org.wso2.siddhi.core.executor.VariableExpressionExecutor;
 import org.wso2.siddhi.core.query.processor.Processor;
 import org.wso2.siddhi.core.table.EventTable;
-import org.wso2.siddhi.core.util.parser.OperatorParser;
 import org.wso2.siddhi.core.util.collection.operator.Finder;
 import org.wso2.siddhi.core.util.collection.operator.MatchingMetaStateHolder;
+import org.wso2.siddhi.core.util.parser.OperatorParser;
 import org.wso2.siddhi.query.api.exception.ExecutionPlanValidationException;
 import org.wso2.siddhi.query.api.expression.Expression;
 
@@ -79,11 +79,17 @@ public class LengthWindowProcessor extends WindowProcessor implements FindablePr
                         streamEventChunk.insertBeforeCurrent(firstEvent);
                         this.expiredEventChunk.add(clonedEvent);
                     } else {
-                        streamEventChunk.insertAfterCurrent(clonedEvent);
                         StreamEvent resetEvent = streamEventCloner.copyStreamEvent(streamEvent);
                         resetEvent.setType(ComplexEvent.Type.RESET);
+                        // adding resetEvent and clonedEvent event to the streamEventChunk
+                        // since we are using insertAfterCurrent(), the final order will be
+                        // currentEvent > clonedEvent (or expiredEvent) > resetEvent
                         streamEventChunk.insertAfterCurrent(resetEvent);
-                        // skip the added clonedEvents from next iteration.
+                        streamEventChunk.insertAfterCurrent(clonedEvent);
+
+                        // since we manually added resetEvent and clonedEvent in earlier step
+                        // we have to skip those two events from getting processed in the next
+                        // iteration. Hence, calling next() twice.
                         streamEventChunk.next();
                         streamEventChunk.next();
                     }
@@ -101,7 +107,7 @@ public class LengthWindowProcessor extends WindowProcessor implements FindablePr
     @Override
     public Finder constructFinder(Expression expression, MatchingMetaStateHolder matchingMetaStateHolder, ExecutionPlanContext executionPlanContext,
                                   List<VariableExpressionExecutor> variableExpressionExecutors, Map<String, EventTable> eventTableMap) {
-        return OperatorParser.constructOperator(expiredEventChunk, expression, matchingMetaStateHolder,executionPlanContext,variableExpressionExecutors,eventTableMap);
+        return OperatorParser.constructOperator(expiredEventChunk, expression, matchingMetaStateHolder, executionPlanContext, variableExpressionExecutors, eventTableMap);
     }
 
     @Override
