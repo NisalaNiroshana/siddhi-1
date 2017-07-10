@@ -66,7 +66,9 @@ public class SnapshotService {
         try {
             this.executionPlanContext.getThreadBarrier().lock();
             for (Snapshotable snapshotable : snapshotableList) {
-                snapshotable.restoreState(snapshots.get(snapshotable.getElementId()));
+                if (snapshots != null) {
+                    snapshotable.restoreState(snapshots.get(snapshotable.getElementId()));
+                }
             }
         } finally {
             executionPlanContext.getThreadBarrier().unlock();
