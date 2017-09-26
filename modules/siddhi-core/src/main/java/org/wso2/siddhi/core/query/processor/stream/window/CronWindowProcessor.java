@@ -17,7 +17,17 @@
  */
 package org.wso2.siddhi.core.query.processor.stream.window;
 
-import org.quartz.*;
+import org.quartz.CronScheduleBuilder;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.JobKey;
+import org.quartz.Scheduler;
+import org.quartz.SchedulerException;
+import org.quartz.SchedulerFactory;
+import org.quartz.Trigger;
 import org.quartz.impl.StdSchedulerFactory;
 import org.wso2.siddhi.core.config.ExecutionPlanContext;
 import org.wso2.siddhi.core.event.ComplexEventChunk;
@@ -122,7 +132,6 @@ public class CronWindowProcessor extends WindowProcessor implements Job {
 
         ComplexEventChunk<StreamEvent> streamEventChunk = new ComplexEventChunk<StreamEvent>(false);
         synchronized (this) {
-            if (currentEventChunk.getFirst() != null) {
                 long currentTime = executionPlanContext.getTimestampGenerator().currentTime();
                 while (expiredEventChunk.hasNext()) {
                     StreamEvent expiredEvent = expiredEventChunk.next();
@@ -142,7 +151,6 @@ public class CronWindowProcessor extends WindowProcessor implements Job {
                 streamEventChunk.add(currentEventChunk.getFirst());
                 currentEventChunk.clear();
 
-            }
         }
         if (streamEventChunk.getFirst() != null) {
             nextProcessor.process(streamEventChunk);
