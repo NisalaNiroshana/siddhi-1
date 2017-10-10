@@ -26,11 +26,15 @@ import org.wso2.siddhi.core.SiddhiManager;
 import org.wso2.siddhi.core.event.Event;
 import org.wso2.siddhi.core.stream.input.InputHandler;
 import org.wso2.siddhi.core.stream.output.StreamCallback;
+import org.wso2.siddhi.core.test.util.SiddhiTestHelper;
 import org.wso2.siddhi.core.util.EventPrinter;
+
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class WindowPartitionTestCase {
     static final Logger log = Logger.getLogger(WindowPartitionTestCase.class);
     private int inEventCount;
+    private AtomicInteger inEventAtomicCount;
     private int removeEventCount;
     private boolean eventArrived;
     private boolean firstEvent;
@@ -41,6 +45,7 @@ public class WindowPartitionTestCase {
         removeEventCount = 0;
         eventArrived = false;
         firstEvent = true;
+        inEventAtomicCount = new AtomicInteger(0);
     }
 
 
@@ -331,6 +336,130 @@ public class WindowPartitionTestCase {
         Assert.assertTrue(7 >= inEventCount);
         Assert.assertEquals(0, removeEventCount);
         executionRuntime.shutdown();
+
+    }
+
+    @Test
+    public void testWindowPartitionQuery6() throws InterruptedException {
+        log.info("Window Partition test6 - TableWindow");
+        SiddhiManager siddhiManager = new SiddhiManager();
+        String streams = "" +
+                "define stream order (billnum string, custid string, items string, dow string, timestamp long); " +
+                "define table dow_items (custid string, dow string, item string) ; " +
+                "define stream dow_items_stream (custid string, dow string, item string); ";
+        String query = "" +
+                "partition with (custid of order) " +
+                "begin " +
+                "@info(name = 'query1') " +
+                "from order join dow_items \n" +
+                "on order.custid == dow_items.custid \n" +
+                "select  dow_items.item\n" +
+                "having order.items == \"item1\" \n" +
+                "insert into recommendationStream ;" +
+                "end;" +
+                "@info(name = 'query2') " +
+                "from dow_items_stream " +
+                "insert into dow_items ;" +
+                "" +
+                "";
+
+
+        ExecutionPlanRuntime executionRuntime = siddhiManager.createExecutionPlanRuntime(streams + query);
+
+
+        executionRuntime.addCallback("recommendationStream", new StreamCallback() {
+            @Override
+            public void receive(Event[] events) {
+                EventPrinter.print(events);
+                for (Event event : events) {
+                    if (event.isExpired()) {
+                        removeEventCount++;
+                    } else {
+                        inEventAtomicCount.getAndIncrement();
+                    }
+                    eventArrived = true;
+                }
+            }
+        });
+
+        InputHandler inputHandler1 = executionRuntime.getInputHandler("dow_items_stream");
+        InputHandler inputHandler2 = executionRuntime.getInputHandler("order");
+        executionRuntime.start();
+        inputHandler1.send(new Object[]{"1","MON", "item1"});
+        inputHandler2.send(new Object[]{"123","1", "item1", "MON", System.currentTimeMillis()});
+
+
+        SiddhiTestHelper.waitForEvents(100, 1, inEventAtomicCount, 5000);
+        Assert.assertTrue(eventArrived);
+        Assert.assertEquals(1, inEventAtomicCount.intValue());
+        executionRuntime.shutdown();
+
+    }
+    @Test
+    public void testEventWindowPartition() throws InterruptedException {
+
+        SiddhiManager siddhiManager = new SiddhiManager();
+
+        String cseEventStream = "define stream cseEventStream (symbol string, price float, volume int); " +
+                "define window cseEventWindow (symbol string, price float, volume int) lengthBatch"
+                + "(4); ";
+
+        String query = "partition with (symbol of cseEventStream, symbol of cseEventWindow)" +
+                "begin " +
+                "@info(name = 'query0') " +
+
+                "from cseEventStream " +
+                "insert into cseEventWindow; " +
+                "" +
+                "@info(name = 'query1') from cseEventWindow " +
+                "select symbol,sum(price) as totalPrice,volume " +
+                "group by symbol " +
+                "insert into outputStream ;" +
+                "end;";
+
+        ExecutionPlanRuntime executionPlanRuntime = siddhiManager.createExecutionPlanRuntime(cseEventStream + query);
+
+        executionPlanRuntime.addCallback("outputStream", new StreamCallback() {
+
+            @Override
+            public void receive(Event[] events) {
+                EventPrinter.print(events);
+                for (Event event : events) {
+                    if (!event.isExpired()) {
+                        inEventAtomicCount.incrementAndGet();
+                        //We are getting four events even after groupby because of partitioning. Partition receiver will
+                        //break the coming event chunk. If we fix that to group all events for same key into one
+                        // chunk then event order will get affected.
+                        if (inEventAtomicCount.get() == 1) {
+                            Assert.assertEquals(700.0, event.getData(1));
+                            Assert.assertEquals("IBM", event.getData(0));
+                        } else if (inEventAtomicCount.get() == 2) {
+                            Assert.assertEquals(60.5, event.getData(1));
+                            Assert.assertEquals("WSO2", event.getData(0));
+                        } else if (inEventAtomicCount.get() == 3) {
+                            Assert.assertEquals(1401.0, event.getData(1));
+                            Assert.assertEquals("IBM", event.getData(0));
+                        } else if (inEventAtomicCount.get() == 3) {
+                            Assert.assertEquals(123.0, event.getData(1));
+                            Assert.assertEquals("WSO2", event.getData(0));
+                        }
+                    }
+                }
+                eventArrived = true;
+            }
+        });
+
+
+        InputHandler inputHandler = executionPlanRuntime.getInputHandler("cseEventStream");
+        executionPlanRuntime.start();
+        inputHandler.send(new Object[]{"IBM", 700f, 0});
+        inputHandler.send(new Object[]{"WSO2", 60.5f, 1});
+        inputHandler.send(new Object[]{"IBM", 701f, 1});
+        inputHandler.send(new Object[]{"WSO2", 62.5f, 1});
+        SiddhiTestHelper.waitForEvents(100, 4, inEventAtomicCount, 10000);
+        Assert.assertEquals(4, inEventAtomicCount.intValue());
+        Assert.assertTrue(eventArrived);
+        executionPlanRuntime.shutdown();
 
     }
 

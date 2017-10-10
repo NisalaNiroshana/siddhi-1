@@ -20,6 +20,7 @@ package org.wso2.siddhi.core.partition;
 import org.wso2.siddhi.core.config.ExecutionPlanContext;
 import org.wso2.siddhi.core.event.state.MetaStateEvent;
 import org.wso2.siddhi.core.event.stream.MetaStreamEvent;
+import org.wso2.siddhi.core.exception.ExecutionPlanCreationException;
 import org.wso2.siddhi.core.executor.VariableExpressionExecutor;
 import org.wso2.siddhi.core.partition.executor.PartitionExecutor;
 import org.wso2.siddhi.core.query.QueryRuntime;
@@ -27,6 +28,7 @@ import org.wso2.siddhi.core.query.input.stream.join.JoinStreamRuntime;
 import org.wso2.siddhi.core.query.input.stream.single.SingleStreamRuntime;
 import org.wso2.siddhi.core.query.input.stream.state.StateStreamRuntime;
 import org.wso2.siddhi.core.query.output.callback.InsertIntoStreamCallback;
+import org.wso2.siddhi.core.query.output.callback.InsertIntoWindowCallback;
 import org.wso2.siddhi.core.stream.StreamJunction;
 import org.wso2.siddhi.core.util.parser.helper.DefinitionParserHelper;
 import org.wso2.siddhi.core.util.snapshot.Snapshotable;
@@ -66,6 +68,9 @@ public class PartitionRuntime implements Snapshotable {
     private ExecutionPlanContext executionPlanContext;
 
     public PartitionRuntime(ConcurrentMap<String, AbstractDefinition> streamDefinitionMap, ConcurrentMap<String, StreamJunction> streamJunctionMap, Partition partition, ExecutionPlanContext executionPlanContext) {
+        if (partition.getPartitionTypeMap().isEmpty()) {
+            throw new ExecutionPlanCreationException("Partition must have at least one partition key. But found none.");
+        }
         this.executionPlanContext = executionPlanContext;
         try {
             Element element = AnnotationHelper.getAnnotationElement("info", "name", partition.getAnnotations());
@@ -119,6 +124,22 @@ public class PartitionRuntime implements Snapshotable {
                 }
                 insertIntoStreamCallback.init(streamJunctionMap.get(id));
             }
+        } else if (query.getOutputStream() instanceof InsertIntoStream && metaQueryRuntime.getOutputCallback()
+                instanceof InsertIntoWindowCallback) {
+            InsertIntoWindowCallback insertIntoWindowCallback = (InsertIntoWindowCallback) metaQueryRuntime.getOutputCallback();
+            StreamDefinition streamDefinition = insertIntoWindowCallback.getOutputStreamDefinition();
+            String id = streamDefinition.getId();
+            streamDefinitionMap.putIfAbsent(id, streamDefinition);
+            DefinitionParserHelper.validateOutputStream(streamDefinition, streamDefinitionMap.get(id));
+            StreamJunction outputStreamJunction = streamJunctionMap.get(id);
+
+            if (outputStreamJunction == null) {
+                outputStreamJunction = new StreamJunction(streamDefinition,
+                                                          executionPlanContext.getExecutorService(),
+                                                          executionPlanContext.getBufferSize(), executionPlanContext);
+                streamJunctionMap.putIfAbsent(id, outputStreamJunction);
+            }
+            insertIntoWindowCallback.getEventWindow().setPublisher(streamJunctionMap.get(id).constructPublisher());
         }
         metaQueryRuntimeMap.put(metaQueryRuntime.getQueryId(), metaQueryRuntime);
 
