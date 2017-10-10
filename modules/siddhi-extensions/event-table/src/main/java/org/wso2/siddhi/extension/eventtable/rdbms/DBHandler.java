@@ -247,6 +247,8 @@ public class DBHandler {
         List<Object[]> selectedEventList = new ArrayList<Object[]>();
         Connection con = null;
         int[] updatedRows;
+        int conditionArrayStartIndex = executionInfo.getUpdateQueryColumnOrder().size() -
+                executionInfo.getConditionQueryColumnOrder().size();
         boolean isInserted = false;
 
         try {
@@ -260,7 +262,8 @@ public class DBHandler {
             for (Object[] obj : updateEventList) {
                 populateStatement(obj, updatePreparedStatement, executionInfo.getUpdateQueryColumnOrder());
                 updatePreparedStatement.addBatch();
-                populateStatement(obj, selectionPreparedStatement, executionInfo.getConditionQueryColumnOrder());
+                populateStatement(Arrays.copyOfRange(obj, conditionArrayStartIndex, obj.length),
+                        selectionPreparedStatement, executionInfo.getConditionQueryColumnOrder());
                 if (selectionPreparedStatement != null && isBloomFilterEnabled) {
                     ResultSet resultSet = selectionPreparedStatement.executeQuery();
                     populateEventListFromResultSet(selectedEventList, resultSet);
