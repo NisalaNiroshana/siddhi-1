@@ -62,6 +62,8 @@
                 <element key="notEqual">!=</element>
                 <element key="and">AND</element>
                 <element key="or">OR</element>
+                <element key="not">NOT</element>
+                <element key="isNull">IS NULL</element>
             </elements>
         </mapping>
         <mapping db='mysql'>
@@ -71,8 +73,8 @@
         </mapping>
         <mapping db='postgresql'>
             <elements>
-               	<element key="bool">SMALLINT</element>
-				<element key="integer">INTEGER</element>
+                <element key="bool">SMALLINT</element>
+                <element key="integer">INTEGER</element>
             </elements>
         </mapping>
         <mapping db='oracle'>
