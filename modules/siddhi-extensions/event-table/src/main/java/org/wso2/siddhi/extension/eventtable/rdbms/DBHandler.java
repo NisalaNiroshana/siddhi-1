@@ -440,6 +440,10 @@ public class DBHandler {
             if (!tableExists) {
                 con = dataSource.getConnection();
                 stmt = con.createStatement();
+                if (log.isDebugEnabled()) {
+                    log.debug("Operation: initializeConnection, Create Table Statement: " +
+                            executionInfo.getPreparedCreateTableStatement());
+                }
                 stmt.executeUpdate(executionInfo.getPreparedCreateTableStatement());
                 if (!con.getAutoCommit()) {
                     con.commit();
