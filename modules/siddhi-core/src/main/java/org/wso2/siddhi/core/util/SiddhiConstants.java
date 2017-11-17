@@ -36,6 +36,8 @@ public final class SiddhiConstants {
     public static final String ANNOTATION_INDEX_BY = "IndexBy";
     public static final String ANNOTATION_FROM = "from";
     public static final String ANNOTATION_BUFFER_SIZE = "BufferSize";
+    public static final String ANNOTATION_CLEAN_AGGREGATORS = "CleanAggregators";
+	public static final String ANNOTATION_INTERVAL = "interval";
 
     public static final String TRUE = "true";
     public static final String TRIGGER_START = "start";
